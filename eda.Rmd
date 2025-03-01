@@ -1,0 +1,135 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(data.table)
+
+dt <- fread("kidney_disease.csv")
+
+# Identify numeric and categorical columns
+num_cols <- names(dt)[sapply(dt, is.numeric)]
+cat_cols <- names(dt)[sapply(dt, function(x) is.character(x) | is.factor(x))]
+
+# Convert all integer columns to numeric (double)
+dt[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols]
+
+print(num_cols)  # Numeric columns
+print(cat_cols)  # Categorical columns
+lapply(dt[, ..cat_cols], table)
+
+# Function to remove trailing \t and any extra whitespace
+clean_column <- function(x) {
+  if (is.character(x)) {
+    return(trimws(gsub("\\t", "", x)))  # Remove tab and trim whitespace
+  }
+  return(x)  # Return unchanged if not character
+}
+
+# Apply cleaning to all columns
+dt[, (names(dt)) := lapply(.SD, clean_column)]
+
+# Verify unique values after cleaning
+lapply(dt, unique)
+```
+
+```{r}
+# Impute missing values with mean based on Target group
+for (col in num_cols) {
+  dt[, (col) := fifelse(is.na(get(col)), mean(get(col), na.rm = TRUE), get(col)), by = classification]
+}
+
+print(dt)
+
+```
+
+```{r}
+library(ggplot2)
+dt[, .N, by = classification]
+
+num_cols <- names(dt)[sapply(dt, is.numeric)]
+
+# Convert to long format for faceting
+dt_long <- melt(dt, id.vars = "classification", measure.vars = num_cols, variable.name = "Numeric_Variable", value.name = "Value")
+
+# Boxplot faceted by numeric variable
+ggplot(dt_long, aes(x = classification, y = Value, fill = classification)) +
+  geom_boxplot() +
+  facet_wrap(~ Numeric_Variable, scales = "free_y") +
+  theme_minimal() +
+  labs(title = "Boxplots of Numeric Variables by Classification",
+       x = "ckd /notckd",
+       y = "Value") +
+  scale_fill_manual(values = c("ckd" = "blue", "notckd" = "red"))  # Custom colors (optional)
+```
+```{r}
+# Compute correlation matrix
+cor_matrix <- cor(dt[, ..num_cols], use = "pairwise.complete.obs")
+
+# Convert correlation matrix to long format for ggplot
+cor_long <- melt(cor_matrix)
+
+# Plot heatmap
+ggplot(cor_long, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  labs(title = "Correlation Heatmap", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+# Identify categorical columns (excluding Classification)
+cat_cols <- names(dt)[sapply(dt, is.character) & names(dt) != "Classification"]
+
+# Get unique values for each categorical variable
+
+
+# Print unique values for each categorical column
+print(unique_values)
+
+# Replace "" and "?" with NA in all columns
+dt[, (names(dt)) := lapply(.SD, function(x) fifelse(x %in% c("", "?"), NA, x))]
+
+unique_values <- lapply(dt[, ..cat_cols], unique)
+print(unique_values)
+```
+
+```{r}
+
+# Convert specified columns to numeric (handling character-to-numeric conversion)
+conv <- c("wc", "rc", "pcv")
+dt[, (conv) := lapply(.SD, function(x) as.numeric(x)), .SDcols = conv]
+
+# Impute missing values with mean based on Classification
+for (col in conv) {
+  dt[, (col) := fifelse(is.na(get(col)), mean(get(col), na.rm = TRUE), get(col)), by = classification]
+}
+
+# Identify categorical columns (excluding Classification)
+cat_cols <- names(dt)[sapply(dt, is.character) & names(dt) != "Classification"]
+
+unique_values <- lapply(dt[, ..cat_cols], unique)
+print(unique_values)
+```
+
+
+```{r}
+# Identify categorical variables (excluding Classification)
+cat_cols <- names(dt)[sapply(dt, is.character) & names(dt) != "classification"]
+
+# Convert to long format for faceting
+dt_long <- melt(dt, id.vars = "classification", measure.vars = cat_cols, 
+                variable.name = "Categorical_Variable", value.name = "Category")
+
+# Plot faceted bar charts
+ggplot(dt_long, aes(x = Category, fill = classification)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ Categorical_Variable, scales = "free_x") +  # Facet by each categorical variable
+  theme_minimal() +
+  labs(title = "Counts of Categorical Variables Faceted by Classification",
+       x = "Category",
+       y = "Count") +
+  scale_fill_manual(values = c("ckd" = "blue", "notckd" = "red"))  # Customize colors
+
+```
